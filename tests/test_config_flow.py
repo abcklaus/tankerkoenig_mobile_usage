@@ -5,6 +5,10 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import aiohttp
+from homeassistant import config_entries
+from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -15,10 +19,6 @@ from custom_components.tankerkoenig_mobile.const import (
     CONF_TRACKER,
     DOMAIN,
 )
-from homeassistant import config_entries
-from homeassistant.const import CONF_API_KEY
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
 
 from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options
 

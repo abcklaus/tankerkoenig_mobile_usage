@@ -7,6 +7,9 @@ from typing import Any
 
 import aiohttp
 from freezegun.api import FrozenDateTimeFactory
+from homeassistant.const import CONF_API_KEY
+from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -14,9 +17,6 @@ from pytest_homeassistant_custom_component.common import (
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.tankerkoenig_mobile.const import API_URL, DOMAIN
-from homeassistant.const import CONF_API_KEY
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options
 
