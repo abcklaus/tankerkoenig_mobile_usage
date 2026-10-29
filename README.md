@@ -18,26 +18,48 @@ Ohne HACS: den Ordner `custom_components/tankerkoenig_mobile` nach `config/custo
 
 ## Einstellungen
 
+**Allgemein**
+
 | Option | Bedeutung |
 |---|---|
 | API-Key | Persönlicher Tankerkönig-Key (nur bei der Einrichtung) |
-| Preise zuhause / unterwegs | Welche Standorte abgefragt werden |
-| Standort Wohnmobil | `device_tracker`, `person` oder `zone` mit `latitude`/`longitude` |
-| Suchradius | 1–25 km |
 | Kraftstoffart | `diesel`, `e5`, `e10` oder `all` |
-| Positivliste | Tankstellen-IDs oder Marken, getrennt durch Komma/Zeilenumbruch. Leer = alle |
-| Abrufintervall | Minuten, mindestens 5 (Standard 167 ≈ 10000 s) |
-| Neuer Abruf nach Ortswechsel | Strecke in km, ab der unterwegs sofort neu abgefragt wird |
-| Keine Abrufe unterwegs in diesen Zonen | Zonen (Standard `zone.home`), in denen „unterwegs“ pausiert. Beim Einfahren werden sofort die Preise für zuhause abgerufen, beim Verlassen sofort die für unterwegs |
-| Feste Abrufzeiten | Lokale Uhrzeiten (`HH:MM`, getrennt durch Komma/Zeilenumbruch), zu denen auf jeden Fall abgerufen wird – z. B. wenn Preise in einem Land zu festen Zeiten wechseln. Unterwegs gilt die Pause-Zone vorrangig |
+| Suchradius | 1–25 km, gilt für zuhause und unterwegs |
+| Abrufintervall | Minuten, mindestens 5 (Standard 167 ≈ 10000 s). Unterwegs nur, solange das Wohnmobil steht |
+| Feste Abrufzeiten | Uhrzeiten im **24-Stunden-Format `HH:MM`** (z. B. `06:00, 12:00, 18:30`), getrennt durch Komma/Zeilenumbruch. Zu diesen Zeiten wird auf jeden Fall abgerufen – unterwegs nur im Stand |
+
+**Abschnitt „Zuhause“**
+
+| Option | Bedeutung |
+|---|---|
+| Preise zuhause abfragen | Standort aus der HA-Konfiguration |
+| Positivliste Tankstellen (nur zuhause) | Tankstellen-IDs oder Marken, getrennt durch Komma/Zeilenumbruch. Leer = alle. Unterwegs wird **nicht** gefiltert |
+
+**Abschnitt „Unterwegs“**
+
+| Option | Bedeutung |
+|---|---|
+| Preise unterwegs abfragen | |
+| Standort Wohnmobil | `device_tracker`, `person` oder `zone` mit `latitude`/`longitude` |
+| Daheim-Zone | Zone (Standard `zone.home`), in der für unterwegs nicht abgerufen wird. Beim Einfahren werden sofort die Preise für zuhause abgerufen |
+| Standzeit bis zum Abruf | Minuten am gleichen Ort, bevor abgerufen wird (Standard 10) |
+| Standort-Toleranz | Bewegungen darunter (GPS-Ungenauigkeit) zählen nicht als Ortswechsel (Standard 200 m) |
 
 Alles außer dem API-Key lässt sich später über *Konfigurieren* ändern.
+
+### Abruflogik unterwegs
+
+1. Bewegt sich das Wohnmobil weiter als die Standort-Toleranz, gilt es als **in Fahrt**: keine Abrufe, auch nicht zu festen Zeiten.
+2. Steht es die eingestellte **Standzeit** am gleichen Ort, wird abgerufen. Danach gilt das Abrufintervall (und die festen Zeiten), bis es wieder losfährt.
+3. In der **Daheim-Zone** wird nie für unterwegs abgerufen. Beim Verlassen beginnt die Fahrt (Abruf erst nach der Standzeit).
+
+Nach einem Update: Home Assistant neu starten und den Browser neu laden, damit die neuen Beschriftungen angezeigt werden.
 
 ## Entities
 
 Pro aktivem Standort ein Gerät („Tankerkönig Zuhause“, „Tankerkönig Unterwegs“) mit:
 
-- **Tankstellen** – State `ok`, sobald Daten vorliegen. Attribute: die API-Antwort (`ok`, `license`, `data`, `status`, `stations` – gefiltert nach Positivliste) plus `last_success`, `last_error`, `query_latitude`, `query_longitude` und `paused_in_zone` (true, solange das Wohnmobil in einer Pause-Zone steht).
+- **Tankstellen** – State `ok`, sobald Daten vorliegen. Attribute: die API-Antwort (`ok`, `license`, `data`, `status`, `stations` – zuhause gefiltert nach Positivliste) plus `last_success`, `last_error`, `query_latitude`, `query_longitude` sowie unterwegs `paused_in_zone` (Wohnmobil in der Daheim-Zone) und `vehicle_moving` (Wohnmobil in Fahrt).
 - **Letzter erfolgreicher Abruf** – Timestamp-Sensor (Diagnose).
 
 Schlägt ein Abruf fehl (kein Netz, Timeout, API-Fehler), bleiben State und Attribute unverändert, nur `last_error` wird gesetzt. Danach wird mit Backoff (5, 10, 20 … Minuten, höchstens bis zum normalen Intervall) erneut versucht.

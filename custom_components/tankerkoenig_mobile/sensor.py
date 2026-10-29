@@ -13,7 +13,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import TankerkoenigConfigEntry
-from .const import DOMAIN, LOCATION_NAMES
+from .const import DOMAIN, LOCATION_MOBILE, LOCATION_NAMES
 from .coordinator import TankerkoenigLocationCoordinator
 
 # Keys the API returns; kept out of the recorder because "stations" easily
@@ -77,7 +77,9 @@ class TankerkoenigStationsSensor(TankerkoenigEntity, SensorEntity):
         attrs["last_error"] = self.coordinator.last_error
         attrs["query_latitude"] = data.latitude if data else None
         attrs["query_longitude"] = data.longitude if data else None
-        attrs["paused_in_zone"] = self.coordinator.paused
+        if self.coordinator.location == LOCATION_MOBILE:
+            attrs["paused_in_zone"] = self.coordinator.paused
+            attrs["vehicle_moving"] = self.coordinator.moving
         return attrs
 
 

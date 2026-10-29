@@ -7,14 +7,17 @@ from typing import Any
 import pytest
 
 from custom_components.tankerkoenig_mobile.const import (
+    CONF_DWELL_MINUTES,
     CONF_ENABLE_HOME,
     CONF_ENABLE_MOBILE,
     CONF_FUEL_TYPE,
-    CONF_MOVE_THRESHOLD,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
     CONF_STATION_FILTER,
+    CONF_STATIONARY_TOLERANCE,
     CONF_TRACKER,
+    SECTION_HOME,
+    SECTION_MOBILE,
 )
 
 pytest_plugins = "pytest_homeassistant_custom_component"
@@ -89,9 +92,32 @@ def make_options(**overrides: Any) -> dict[str, Any]:
         CONF_FUEL_TYPE: "diesel",
         CONF_STATION_FILTER: "",
         CONF_SCAN_INTERVAL: 167,
-        CONF_MOVE_THRESHOLD: 2,
+        CONF_DWELL_MINUTES: 10,
+        CONF_STATIONARY_TOLERANCE: 200,
     }
     options.update(overrides)
     if options[CONF_ENABLE_MOBILE]:
         options.setdefault(CONF_TRACKER, TRACKER)
     return options
+
+
+def nested_input(**overrides: Any) -> dict[str, Any]:
+    """Return form input with the home/mobile sections, as the frontend sends it."""
+    flat = make_options(**overrides)
+    home_keys = {CONF_ENABLE_HOME, CONF_STATION_FILTER}
+    mobile_keys = {
+        CONF_ENABLE_MOBILE,
+        CONF_TRACKER,
+        "pause_zones",
+        CONF_DWELL_MINUTES,
+        CONF_STATIONARY_TOLERANCE,
+    }
+    nested: dict[str, Any] = {SECTION_HOME: {}, SECTION_MOBILE: {}}
+    for key, value in flat.items():
+        if key in home_keys:
+            nested[SECTION_HOME][key] = value
+        elif key in mobile_keys:
+            nested[SECTION_MOBILE][key] = value
+        else:
+            nested[key] = value
+    return nested

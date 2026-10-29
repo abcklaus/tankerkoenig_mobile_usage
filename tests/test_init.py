@@ -23,6 +23,7 @@ from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options
 
 # Fixed coordinates of the hass test fixture's home location are used for home.
 WOMO = {"latitude": 48.0, "longitude": 9.0}
+WOMO_JITTER = {"latitude": 48.0009, "longitude": 9.0}  # ~100 m
 WOMO_NEARBY = {"latitude": 48.004, "longitude": 9.0}  # ~450 m
 WOMO_FAR = {"latitude": 48.1, "longitude": 9.0}  # ~11 km
 HOME_ZONE = {"latitude": 48.0, "longitude": 9.0, "radius": 1000}
@@ -139,35 +140,98 @@ async def test_station_filter_by_id_and_brand(
     assert state.attributes["license"] == STATIONS_RESPONSE["license"]
 
 
-async def test_mobile_refreshes_on_movement(
+async def test_station_filter_not_applied_on_the_road(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """The allow list only applies to home."""
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    hass.states.async_set(TRACKER, "not_home", WOMO)
+    entry = await _setup(hass, enable_mobile=True, station_filter="JET")
+
+    home = hass.states.get(_entity_id(hass, entry, "home", "stations"))
+    mobile = hass.states.get(_entity_id(hass, entry, "mobile", "stations"))
+    assert [s["id"] for s in home.attributes["stations"]] == ["station-jet"]
+    assert mobile.attributes["stations"] == STATIONS_RESPONSE["stations"]
+    assert "vehicle_moving" not in home.attributes
+
+
+async def test_mobile_fetches_after_standstill(
     hass: HomeAssistant,
     aioclient_mock: AiohttpClientMocker,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """Small moves are ignored, large moves refresh, respecting the 5 min gap."""
+    """No requests while driving; fetch once parked for the dwell time, then poll."""
     aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
     hass.states.async_set(TRACKER, "not_home", WOMO)
     entry = await _setup(hass, enable_home=False, enable_mobile=True)
+    entity_id = _entity_id(hass, entry, "mobile", "stations")
     assert aioclient_mock.call_count == 1
-    assert aioclient_mock.mock_calls[0][1].query["lat"] == "48.000000"
+    assert hass.states.get(entity_id).attributes["vehicle_moving"] is False
 
+    # GPS jitter within the tolerance does not count as driving.
+    hass.states.async_set(TRACKER, "not_home", WOMO_JITTER)
+    await hass.async_block_till_done()
+    assert hass.states.get(entity_id).attributes["vehicle_moving"] is False
+
+    # Start driving.
     hass.states.async_set(TRACKER, "not_home", WOMO_NEARBY)
     await hass.async_block_till_done()
-    assert aioclient_mock.call_count == 1
+    assert hass.states.get(entity_id).attributes["vehicle_moving"] is True
 
-    # Far move right after the last request: delayed until 5 min have passed.
+    # Still driving 8 minutes later: the dwell timer restarts.
+    freezer.tick(timedelta(minutes=8))
     hass.states.async_set(TRACKER, "not_home", WOMO_FAR)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=8))
+    async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert aioclient_mock.call_count == 1
 
-    freezer.tick(timedelta(minutes=5, seconds=1))
+    # Interval ticks while driving do not query either.
+    freezer.tick(timedelta(minutes=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 1
+
+    # Parked for 10 minutes at the far location: fetch.
+    freezer.tick(timedelta(minutes=1, seconds=1))
     async_fire_time_changed(hass)
     await hass.async_block_till_done()
     assert aioclient_mock.call_count == 2
     assert aioclient_mock.mock_calls[1][1].query["lat"] == "48.100000"
-
-    state = hass.states.get(_entity_id(hass, entry, "mobile", "stations"))
+    state = hass.states.get(entity_id)
+    assert state.attributes["vehicle_moving"] is False
     assert state.attributes["query_latitude"] == WOMO_FAR["latitude"]
+
+    # Parked: the regular interval applies again.
+    freezer.tick(timedelta(minutes=168))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 3
+
+
+async def test_fixed_times_skipped_while_driving(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Fixed times do not query on the road while the vehicle is moving."""
+    tz = dt_util.get_default_time_zone()
+    freezer.move_to(datetime(2026, 10, 29, 11, 50, tzinfo=tz))
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    hass.states.async_set(TRACKER, "not_home", WOMO)
+    await _setup(hass, enable_home=False, enable_mobile=True, fixed_times="12:00")
+    assert aioclient_mock.call_count == 1
+
+    freezer.move_to(datetime(2026, 10, 29, 11, 55, tzinfo=tz))
+    hass.states.async_set(TRACKER, "not_home", WOMO_FAR)
+    await hass.async_block_till_done()
+
+    target = datetime(2026, 10, 29, 12, 0, tzinfo=tz)
+    freezer.move_to(target)
+    async_fire_time_changed(hass, target)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 1
 
 
 async def test_mobile_without_coordinates_keeps_waiting(
@@ -194,7 +258,7 @@ async def test_mobile_paused_in_zone(
     aioclient_mock: AiohttpClientMocker,
     freezer: FrozenDateTimeFactory,
 ) -> None:
-    """No requests inside a pause zone, immediate request when leaving it."""
+    """No requests inside the home zone; leaving it starts a trip."""
     aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
     hass.states.async_set("zone.home", "0", HOME_ZONE)
     hass.states.async_set(TRACKER, "home", WOMO)
@@ -219,10 +283,18 @@ async def test_mobile_paused_in_zone(
 
     hass.states.async_set(TRACKER, "not_home", WOMO_FAR)
     await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 0
+    state = hass.states.get(entity_id)
+    assert state.attributes["paused_in_zone"] is False
+    assert state.attributes["vehicle_moving"] is True
+
+    freezer.tick(timedelta(minutes=10, seconds=1))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
     assert aioclient_mock.call_count == 1
     state = hass.states.get(entity_id)
     assert state.state == "ok"
-    assert state.attributes["paused_in_zone"] is False
+    assert state.attributes["vehicle_moving"] is False
 
 
 async def test_entering_zone_refreshes_home(

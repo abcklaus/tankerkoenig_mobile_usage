@@ -16,15 +16,17 @@ from custom_components.tankerkoenig_mobile.const import (
     API_URL,
     CONF_ENABLE_HOME,
     CONF_ENABLE_MOBILE,
+    CONF_STATION_FILTER,
     CONF_TRACKER,
     DOMAIN,
+    SECTION_MOBILE,
 )
 
-from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options
+from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options, nested_input
 
 
 def _user_input(**overrides):
-    return {CONF_API_KEY: API_KEY, **make_options(**overrides)}
+    return {CONF_API_KEY: API_KEY, **nested_input(**overrides)}
 
 
 async def _start(hass: HomeAssistant):
@@ -50,8 +52,9 @@ async def test_user_flow_creates_entry(
 
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert result["data"] == {CONF_API_KEY: API_KEY}
+    # Options are stored flat, without the form sections.
+    assert result["options"] == make_options(enable_mobile=True, fixed_times="")
     assert result["options"][CONF_TRACKER] == TRACKER
-    assert CONF_API_KEY not in result["options"]
 
 
 async def test_user_flow_invalid_auth(
@@ -82,9 +85,9 @@ async def test_user_flow_requires_tracker(hass: HomeAssistant) -> None:
     """Mobile without a tracker is rejected before any request."""
     result = await _start(hass)
     user_input = _user_input(enable_mobile=True)
-    del user_input[CONF_TRACKER]
+    del user_input[SECTION_MOBILE][CONF_TRACKER]
     result = await hass.config_entries.flow.async_configure(result["flow_id"], user_input)
-    assert result["errors"] == {CONF_TRACKER: "tracker_required"}
+    assert result["errors"] == {"base": "tracker_required"}
 
 
 async def test_user_flow_requires_a_location(hass: HomeAssistant) -> None:
@@ -102,25 +105,37 @@ async def test_user_flow_invalid_time(hass: HomeAssistant) -> None:
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], _user_input(fixed_times="12:00, 25:00")
     )
-    assert result["errors"] == {"fixed_times": "invalid_time"}
+    assert result["errors"] == {"base": "invalid_time"}
 
 
 async def test_options_flow(hass: HomeAssistant) -> None:
     """Options can be changed without touching the API key."""
-    entry = MockConfigEntry(domain=DOMAIN, data={CONF_API_KEY: API_KEY}, options=make_options())
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={CONF_API_KEY: API_KEY},
+        options=make_options(station_filter="ARAL", move_threshold_km=2),
+    )
     entry.add_to_hass(hass)
 
     result = await hass.config_entries.options.async_init(entry.entry_id)
     assert result["type"] is FlowResultType.FORM
 
-    new_options = make_options(enable_home=False, enable_mobile=True, station_filter="JET")
+    # The form shows the stored flat options inside their sections.
+    schema = result["data_schema"].schema
+    home_section = next(v for k, v in schema.items() if str(k) == "home")
+    filter_key = next(k for k in home_section.schema.schema if str(k) == CONF_STATION_FILTER)
+    assert filter_key.description == {"suggested_value": "ARAL"}
+
+    new_input = nested_input(enable_home=False, enable_mobile=True, station_filter="JET")
     with patch(
         "custom_components.tankerkoenig_mobile.async_setup_entry", return_value=True
     ):
         result = await hass.config_entries.options.async_configure(
-            result["flow_id"], new_options
+            result["flow_id"], new_input
         )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_ENABLE_HOME] is False
     assert entry.options[CONF_ENABLE_MOBILE] is True
+    assert entry.options[CONF_STATION_FILTER] == "JET"
+    assert "move_threshold_km" not in entry.options
     assert entry.data == {CONF_API_KEY: API_KEY}
