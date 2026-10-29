@@ -6,14 +6,18 @@ import logging
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import ATTR_LATITUDE, ATTR_LONGITUDE, CONF_API_KEY
 from homeassistant.core import Event, EventStateChangedData, HomeAssistant, State, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.event import async_call_later, async_track_state_change_event
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_change,
+)
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from homeassistant.util import dt as dt_util
@@ -21,8 +25,10 @@ from homeassistant.util.location import distance
 
 from .api import TankerkoenigError, async_get_stations
 from .const import (
+    CONF_FIXED_TIMES,
     CONF_FUEL_TYPE,
     CONF_MOVE_THRESHOLD,
+    CONF_PAUSE_ZONES,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
     CONF_STATION_FILTER,
@@ -75,9 +81,24 @@ class LocationData:
             return None
 
 
+def _split_list(raw: str | None) -> list[str]:
+    """Split a comma or newline separated text field."""
+    return [item.strip() for item in re.split(r"[,\n]", raw or "") if item.strip()]
+
+
 def parse_station_filter(raw: str | None) -> set[str]:
-    """Split the allow list (comma or newline separated) into lowercase entries."""
-    return {item.strip().casefold() for item in re.split(r"[,\n]", raw or "") if item.strip()}
+    """Split the allow list into lowercase entries."""
+    return {item.casefold() for item in _split_list(raw)}
+
+
+def parse_fixed_times(raw: str | None) -> list[time]:
+    """Parse "HH:MM" entries; raise ValueError on an invalid entry."""
+    times = []
+    for item in _split_list(raw):
+        if (parsed := dt_util.parse_time(item)) is None:
+            raise ValueError(item)
+        times.append(parsed)
+    return times
 
 
 def filter_stations(response: dict[str, Any], allowed: set[str]) -> dict[str, Any]:
@@ -135,6 +156,14 @@ class TankerkoenigLocationCoordinator(DataUpdateCoordinator[LocationData | None]
             entry.options.get(CONF_MOVE_THRESHOLD, DEFAULT_MOVE_THRESHOLD)
         )
         self._allowed = parse_station_filter(entry.options.get(CONF_STATION_FILTER))
+        self._pause_zones: list[str] = entry.options.get(CONF_PAUSE_ZONES) or []
+        try:
+            self._fixed_times = parse_fixed_times(entry.options.get(CONF_FIXED_TIMES))
+        except ValueError:
+            self._fixed_times = []
+        self.paused = False
+        # Called when the vehicle enters a pause zone (set up in __init__.py).
+        self.on_enter_pause_zone: Callable[[], None] | None = None
         self._store: Store[dict[str, Any]] = Store(
             hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}.{location}"
         )
@@ -165,10 +194,26 @@ class TankerkoenigLocationCoordinator(DataUpdateCoordinator[LocationData | None]
             return None
         return coordinates_from_state(self.hass.states.get(self._tracker))
 
+    def _in_pause_zone(self, coords: tuple[float, float]) -> bool:
+        """Whether the coordinates lie within one of the pause zones."""
+        for zone_id in self._pause_zones:
+            zone = self.hass.states.get(zone_id)
+            if (center := coordinates_from_state(zone)) is None:
+                continue
+            dist = distance(*center, *coords)
+            if dist is not None and dist <= float(zone.attributes.get("radius", 0)):
+                return True
+        return False
+
     async def _async_update_data(self) -> LocationData | None:
         if (coords := self._coordinates()) is None:
             self._handle_failure(f"No coordinates available from {self._tracker}")
             return self.data
+
+        if self.location == LOCATION_MOBILE:
+            self.paused = self._in_pause_zone(coords)
+            if self.paused:
+                return self.data
 
         self._last_attempt = dt_util.utcnow()
         try:
@@ -215,14 +260,48 @@ class TankerkoenigLocationCoordinator(DataUpdateCoordinator[LocationData | None]
     def _handle_tracker_change(self, event: Event[EventStateChangedData]) -> None:
         if (coords := coordinates_from_state(event.data["new_state"])) is None:
             return
-        if self.data is not None:
+        if self._in_pause_zone(coords):
+            if not self.paused:
+                self.paused = True
+                self.async_update_listeners()
+                if self.on_enter_pause_zone is not None:
+                    self.on_enter_pause_zone()
+            return
+        if self.paused:
+            # Left the pause zone: the old data is stale, fetch right away.
+            self.paused = False
+            self.async_update_listeners()
+        elif self.data is not None:
             moved_m = distance(self.data.latitude, self.data.longitude, *coords)
             if moved_m is not None and moved_m < self._move_threshold_km * 1000:
                 return
-        self._request_refresh_rate_limited()
+        self.request_refresh_rate_limited()
 
     @callback
-    def _request_refresh_rate_limited(self) -> None:
+    def async_track_fixed_times(self) -> Callable[[], None]:
+        """Refresh at the configured local times."""
+
+        @callback
+        def _fire(_now: datetime) -> None:
+            self.request_refresh_rate_limited()
+
+        unsubs = [
+            async_track_time_change(
+                self.hass, _fire, hour=at.hour, minute=at.minute, second=at.second
+            )
+            for at in self._fixed_times
+        ]
+
+        @callback
+        def _unsub_all() -> None:
+            for unsub in unsubs:
+                unsub()
+
+        return _unsub_all
+
+    @callback
+    def request_refresh_rate_limited(self) -> None:
+        """Refresh now, or as soon as the 5 minute gap to the last request allows."""
         if self._unsub_delayed_refresh is not None:
             return
         wait = 0.0

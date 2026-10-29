@@ -19,6 +19,8 @@ CONF_FUEL_TYPE = "fuel_type"
 CONF_STATION_FILTER = "station_filter"
 CONF_SCAN_INTERVAL = "scan_interval_min"
 CONF_MOVE_THRESHOLD = "move_threshold_km"
+CONF_PAUSE_ZONES = "pause_zones"
+CONF_FIXED_TIMES = "fixed_times"
 
 DEFAULT_RADIUS = 5
 DEFAULT_FUEL_TYPE = "diesel"

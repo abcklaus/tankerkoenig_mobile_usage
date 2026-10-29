@@ -28,6 +28,8 @@ Ohne HACS: den Ordner `custom_components/tankerkoenig_mobile` nach `config/custo
 | Positivliste | Tankstellen-IDs oder Marken, getrennt durch Komma/Zeilenumbruch. Leer = alle |
 | Abrufintervall | Minuten, mindestens 5 (Standard 167 ≈ 10000 s) |
 | Neuer Abruf nach Ortswechsel | Strecke in km, ab der unterwegs sofort neu abgefragt wird |
+| Keine Abrufe unterwegs in diesen Zonen | Zonen (Standard `zone.home`), in denen „unterwegs“ pausiert. Beim Einfahren werden sofort die Preise für zuhause abgerufen, beim Verlassen sofort die für unterwegs |
+| Feste Abrufzeiten | Lokale Uhrzeiten (`HH:MM`, getrennt durch Komma/Zeilenumbruch), zu denen auf jeden Fall abgerufen wird – z. B. wenn Preise in einem Land zu festen Zeiten wechseln. Unterwegs gilt die Pause-Zone vorrangig |
 
 Alles außer dem API-Key lässt sich später über *Konfigurieren* ändern.
 
@@ -35,7 +37,7 @@ Alles außer dem API-Key lässt sich später über *Konfigurieren* ändern.
 
 Pro aktivem Standort ein Gerät („Tankerkönig Zuhause“, „Tankerkönig Unterwegs“) mit:
 
-- **Tankstellen** – State `ok`, sobald Daten vorliegen. Attribute: die API-Antwort (`ok`, `license`, `data`, `status`, `stations` – gefiltert nach Positivliste) plus `last_success`, `last_error`, `query_latitude`, `query_longitude`.
+- **Tankstellen** – State `ok`, sobald Daten vorliegen. Attribute: die API-Antwort (`ok`, `license`, `data`, `status`, `stations` – gefiltert nach Positivliste) plus `last_success`, `last_error`, `query_latitude`, `query_longitude` und `paused_in_zone` (true, solange das Wohnmobil in einer Pause-Zone steht).
 - **Letzter erfolgreicher Abruf** – Timestamp-Sensor (Diagnose).
 
 Schlägt ein Abruf fehl (kein Netz, Timeout, API-Fehler), bleiben State und Attribute unverändert, nur `last_error` wird gesetzt. Danach wird mit Backoff (5, 10, 20 … Minuten, höchstens bis zum normalen Intervall) erneut versucht.

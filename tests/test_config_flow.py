@@ -96,6 +96,15 @@ async def test_user_flow_requires_a_location(hass: HomeAssistant) -> None:
     assert result["errors"] == {"base": "no_location"}
 
 
+async def test_user_flow_invalid_time(hass: HomeAssistant) -> None:
+    """Fixed times must be HH:MM."""
+    result = await _start(hass)
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], _user_input(fixed_times="12:00, 25:00")
+    )
+    assert result["errors"] == {"fixed_times": "invalid_time"}
+
+
 async def test_options_flow(hass: HomeAssistant) -> None:
     """Options can be changed without touching the API key."""
     entry = MockConfigEntry(domain=DOMAIN, data={CONF_API_KEY: API_KEY}, options=make_options())

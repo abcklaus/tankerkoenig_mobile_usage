@@ -77,6 +77,7 @@ class TankerkoenigStationsSensor(TankerkoenigEntity, SensorEntity):
         attrs["last_error"] = self.coordinator.last_error
         attrs["query_latitude"] = data.latitude if data else None
         attrs["query_longitude"] = data.longitude if data else None
+        attrs["paused_in_zone"] = self.coordinator.paused
         return attrs
 
 

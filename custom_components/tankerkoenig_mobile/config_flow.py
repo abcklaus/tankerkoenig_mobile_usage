@@ -33,8 +33,10 @@ from .api import TankerkoenigAuthError, TankerkoenigError, async_get_stations
 from .const import (
     CONF_ENABLE_HOME,
     CONF_ENABLE_MOBILE,
+    CONF_FIXED_TIMES,
     CONF_FUEL_TYPE,
     CONF_MOVE_THRESHOLD,
+    CONF_PAUSE_ZONES,
     CONF_RADIUS,
     CONF_SCAN_INTERVAL,
     CONF_STATION_FILTER,
@@ -47,6 +49,7 @@ from .const import (
     FUEL_TYPES,
     MAX_RADIUS_KM,
 )
+from .coordinator import parse_fixed_times
 
 SETTINGS_SCHEMA = vol.Schema(
     {
@@ -54,6 +57,10 @@ SETTINGS_SCHEMA = vol.Schema(
         vol.Required(CONF_ENABLE_MOBILE, default=True): BooleanSelector(),
         vol.Optional(CONF_TRACKER): EntitySelector(
             EntitySelectorConfig(domain=["device_tracker", "person", "zone"])
+        ),
+        # No default: the field must stay clearable in the options flow.
+        vol.Optional(CONF_PAUSE_ZONES): EntitySelector(
+            EntitySelectorConfig(domain="zone", multiple=True)
         ),
         vol.Required(CONF_RADIUS, default=DEFAULT_RADIUS): NumberSelector(
             NumberSelectorConfig(
@@ -72,6 +79,9 @@ SETTINGS_SCHEMA = vol.Schema(
             )
         ),
         vol.Optional(CONF_STATION_FILTER, default=""): TextSelector(
+            TextSelectorConfig(multiline=True)
+        ),
+        vol.Optional(CONF_FIXED_TIMES, default=""): TextSelector(
             TextSelectorConfig(multiline=True)
         ),
         vol.Required(CONF_SCAN_INTERVAL, default=DEFAULT_SCAN_INTERVAL): NumberSelector(
@@ -110,6 +120,10 @@ def _validate_settings(user_input: dict[str, Any]) -> dict[str, str]:
         errors["base"] = "no_location"
     elif user_input[CONF_ENABLE_MOBILE] and not user_input.get(CONF_TRACKER):
         errors[CONF_TRACKER] = "tracker_required"
+    try:
+        parse_fixed_times(user_input.get(CONF_FIXED_TIMES))
+    except ValueError:
+        errors[CONF_FIXED_TIMES] = "invalid_time"
     return errors
 
 
@@ -149,7 +163,9 @@ class TankerkoenigMobileConfigFlow(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="user",
-            data_schema=self.add_suggested_values_to_schema(USER_SCHEMA, user_input or {}),
+            data_schema=self.add_suggested_values_to_schema(
+                USER_SCHEMA, user_input or {CONF_PAUSE_ZONES: ["zone.home"]}
+            ),
             errors=errors,
         )
 

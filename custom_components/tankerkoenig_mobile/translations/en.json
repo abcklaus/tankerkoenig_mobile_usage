@@ -13,7 +13,9 @@
           "fuel_type": "Fuel type",
           "station_filter": "Station allow list",
           "scan_interval_min": "Update interval",
-          "move_threshold_km": "Refresh after moving"
+          "move_threshold_km": "Refresh after moving",
+          "pause_zones": "No queries on the road in these zones",
+          "fixed_times": "Fixed update times"
         },
         "data_description": {
           "api_key": "Your personal Tankerkönig API key.",
@@ -21,7 +23,9 @@
           "radius_km": "Max. 25 km (API limit).",
           "station_filter": "Station IDs or brands, separated by comma or newline. Empty = all stations.",
           "scan_interval_min": "Regular polling interval. Tankerkönig allows at most one request every 5 minutes.",
-          "move_threshold_km": "Fetch immediately once the vehicle moved further than this since the last query."
+          "move_threshold_km": "Fetch immediately once the vehicle moved further than this since the last query.",
+          "pause_zones": "While the vehicle is inside one of these zones, no prices are fetched on the road (last data is kept). Entering a zone triggers an immediate home update.",
+          "fixed_times": "Local times (HH:MM) at which prices are always fetched, separated by comma or newline, e.g. 12:00, 12:05."
         }
       }
     },
@@ -29,7 +33,8 @@
       "invalid_auth": "The API key was rejected.",
       "cannot_connect": "Could not reach the Tankerkönig API.",
       "no_location": "Enable at least one location (home or on the road).",
-      "tracker_required": "Select a location entity for prices on the road."
+      "tracker_required": "Select a location entity for prices on the road.",
+      "invalid_time": "Invalid time. Use HH:MM, e.g. 12:00."
     }
   },
   "options": {
@@ -44,20 +49,25 @@
           "fuel_type": "Fuel type",
           "station_filter": "Station allow list",
           "scan_interval_min": "Update interval",
-          "move_threshold_km": "Refresh after moving"
+          "move_threshold_km": "Refresh after moving",
+          "pause_zones": "No queries on the road in these zones",
+          "fixed_times": "Fixed update times"
         },
         "data_description": {
           "tracker_entity": "device_tracker (or person/zone) with latitude/longitude attributes. Required for prices on the road.",
           "radius_km": "Max. 25 km (API limit).",
           "station_filter": "Station IDs or brands, separated by comma or newline. Empty = all stations.",
           "scan_interval_min": "Regular polling interval. Tankerkönig allows at most one request every 5 minutes.",
-          "move_threshold_km": "Fetch immediately once the vehicle moved further than this since the last query."
+          "move_threshold_km": "Fetch immediately once the vehicle moved further than this since the last query.",
+          "pause_zones": "While the vehicle is inside one of these zones, no prices are fetched on the road (last data is kept). Entering a zone triggers an immediate home update.",
+          "fixed_times": "Local times (HH:MM) at which prices are always fetched, separated by comma or newline, e.g. 12:00, 12:05."
         }
       }
     },
     "error": {
       "no_location": "Enable at least one location (home or on the road).",
-      "tracker_required": "Select a location entity for prices on the road."
+      "tracker_required": "Select a location entity for prices on the road.",
+      "invalid_time": "Invalid time. Use HH:MM, e.g. 12:00."
     }
   },
   "selector": {

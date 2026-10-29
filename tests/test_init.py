@@ -1,8 +1,8 @@
-"""Tests for setup, robustness, persistence, filtering and movement refresh."""
+"""Tests for setup, robustness, persistence, filtering, movement, zones and fixed times."""
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 import aiohttp
@@ -10,6 +10,7 @@ from freezegun.api import FrozenDateTimeFactory
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import (
     MockConfigEntry,
     async_fire_time_changed,
@@ -24,6 +25,7 @@ from .conftest import API_KEY, STATIONS_RESPONSE, TRACKER, make_options
 WOMO = {"latitude": 48.0, "longitude": 9.0}
 WOMO_NEARBY = {"latitude": 48.004, "longitude": 9.0}  # ~450 m
 WOMO_FAR = {"latitude": 48.1, "longitude": 9.0}  # ~11 km
+HOME_ZONE = {"latitude": 48.0, "longitude": 9.0, "radius": 1000}
 
 
 async def _setup(hass: HomeAssistant, **options: Any) -> MockConfigEntry:
@@ -185,3 +187,108 @@ async def test_mobile_without_coordinates_keeps_waiting(
     await hass.async_block_till_done()
     assert aioclient_mock.call_count == 1
     assert hass.states.get(_entity_id(hass, entry, "mobile", "stations")).state == "ok"
+
+
+async def test_mobile_paused_in_zone(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """No requests inside a pause zone, immediate request when leaving it."""
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    hass.states.async_set("zone.home", "0", HOME_ZONE)
+    hass.states.async_set(TRACKER, "home", WOMO)
+    entry = await _setup(
+        hass, enable_home=False, enable_mobile=True, pause_zones=["zone.home"]
+    )
+    entity_id = _entity_id(hass, entry, "mobile", "stations")
+
+    assert aioclient_mock.call_count == 0
+    state = hass.states.get(entity_id)
+    assert state.attributes["paused_in_zone"] is True
+    assert state.attributes["last_error"] is None
+
+    # Moving inside the zone and regular interval ticks do not query.
+    hass.states.async_set(TRACKER, "home", WOMO_NEARBY)
+    await hass.async_block_till_done()
+    freezer.tick(timedelta(minutes=170))
+    async_fire_time_changed(hass)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 0
+    assert hass.states.get(entity_id).attributes["last_error"] is None
+
+    hass.states.async_set(TRACKER, "not_home", WOMO_FAR)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 1
+    state = hass.states.get(entity_id)
+    assert state.state == "ok"
+    assert state.attributes["paused_in_zone"] is False
+
+
+async def test_entering_zone_refreshes_home(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """Arriving in the pause zone fetches the home prices right away."""
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    hass.states.async_set("zone.home", "0", HOME_ZONE)
+    hass.states.async_set(TRACKER, "not_home", WOMO_FAR)
+    entry = await _setup(
+        hass, enable_home=True, enable_mobile=True, pause_zones=["zone.home"]
+    )
+    assert aioclient_mock.call_count == 2
+
+    freezer.tick(timedelta(minutes=6))
+    hass.states.async_set(TRACKER, "home", WOMO)
+    await hass.async_block_till_done()
+
+    assert aioclient_mock.call_count == 3
+    assert aioclient_mock.mock_calls[-1][1].query["lat"] == f"{hass.config.latitude:.6f}"
+    mobile = hass.states.get(_entity_id(hass, entry, "mobile", "stations"))
+    assert mobile.attributes["paused_in_zone"] is True
+
+
+async def test_fixed_times_trigger_refresh(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """A configured local time always triggers a request."""
+    tz = dt_util.get_default_time_zone()
+    freezer.move_to(datetime(2026, 10, 29, 11, 50, tzinfo=tz))
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    await _setup(hass, fixed_times="12:00")
+    assert aioclient_mock.call_count == 1
+
+    target = datetime(2026, 10, 29, 12, 0, tzinfo=tz)
+    freezer.move_to(target)
+    async_fire_time_changed(hass, target)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 2
+
+
+async def test_fixed_times_skipped_in_zone(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    freezer: FrozenDateTimeFactory,
+) -> None:
+    """The pause zone takes precedence over fixed times on the road."""
+    tz = dt_util.get_default_time_zone()
+    freezer.move_to(datetime(2026, 10, 29, 11, 50, tzinfo=tz))
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    hass.states.async_set("zone.home", "0", HOME_ZONE)
+    hass.states.async_set(TRACKER, "home", WOMO)
+    await _setup(
+        hass,
+        enable_home=False,
+        enable_mobile=True,
+        pause_zones=["zone.home"],
+        fixed_times="12:00",
+    )
+
+    target = datetime(2026, 10, 29, 12, 0, tzinfo=tz)
+    freezer.move_to(target)
+    async_fire_time_changed(hass, target)
+    await hass.async_block_till_done()
+    assert aioclient_mock.call_count == 0

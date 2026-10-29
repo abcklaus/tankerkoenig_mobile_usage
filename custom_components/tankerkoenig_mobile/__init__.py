@@ -39,9 +39,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: TankerkoenigConfigEntry)
         # Never raises on network errors: falls back to the restored data.
         await coordinator.async_config_entry_first_refresh()
         entry.async_on_unload(coordinator.async_shutdown)
+        entry.async_on_unload(coordinator.async_track_fixed_times())
         if location == LOCATION_MOBILE:
             entry.async_on_unload(coordinator.async_track_tracker())
         coordinators[location] = coordinator
+
+    if LOCATION_HOME in coordinators and LOCATION_MOBILE in coordinators:
+        # Arriving home: fetch the home prices right away.
+        coordinators[LOCATION_MOBILE].on_enter_pause_zone = coordinators[
+            LOCATION_HOME
+        ].request_refresh_rate_limited
 
     entry.runtime_data = coordinators
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
