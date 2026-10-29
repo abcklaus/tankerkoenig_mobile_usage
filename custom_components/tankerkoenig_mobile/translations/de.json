@@ -1,0 +1,83 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Tankerkönig Mobile",
+        "description": "Der Standort zuhause wird aus der Home-Assistant-Konfiguration übernommen.",
+        "data": {
+          "api_key": "API-Key",
+          "enable_home": "Preise zuhause abfragen",
+          "enable_mobile": "Preise unterwegs abfragen",
+          "tracker_entity": "Standort Wohnmobil",
+          "radius_km": "Suchradius",
+          "fuel_type": "Kraftstoffart",
+          "station_filter": "Positivliste Tankstellen",
+          "scan_interval_min": "Abrufintervall",
+          "move_threshold_km": "Neuer Abruf nach Ortswechsel"
+        },
+        "data_description": {
+          "api_key": "Dein persönlicher Tankerkönig-API-Key.",
+          "tracker_entity": "device_tracker (oder person/zone) mit den Attributen latitude/longitude. Pflicht für Preise unterwegs.",
+          "radius_km": "Max. 25 km (Grenze der API).",
+          "station_filter": "Tankstellen-IDs oder Marken, getrennt durch Komma oder Zeilenumbruch. Leer = alle Tankstellen.",
+          "scan_interval_min": "Regelmäßiges Abrufintervall. Tankerkönig erlaubt höchstens einen Abruf alle 5 Minuten.",
+          "move_threshold_km": "Sofort neu abrufen, sobald sich das Wohnmobil seit dem letzten Abruf weiter als diese Strecke bewegt hat."
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Der API-Key wurde abgelehnt.",
+      "cannot_connect": "Die Tankerkönig-API ist nicht erreichbar.",
+      "no_location": "Mindestens einen Standort (zuhause oder unterwegs) aktivieren.",
+      "tracker_required": "Für Preise unterwegs eine Standort-Entity auswählen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Tankerkönig Mobile",
+        "data": {
+          "enable_home": "Preise zuhause abfragen",
+          "enable_mobile": "Preise unterwegs abfragen",
+          "tracker_entity": "Standort Wohnmobil",
+          "radius_km": "Suchradius",
+          "fuel_type": "Kraftstoffart",
+          "station_filter": "Positivliste Tankstellen",
+          "scan_interval_min": "Abrufintervall",
+          "move_threshold_km": "Neuer Abruf nach Ortswechsel"
+        },
+        "data_description": {
+          "tracker_entity": "device_tracker (oder person/zone) mit den Attributen latitude/longitude. Pflicht für Preise unterwegs.",
+          "radius_km": "Max. 25 km (Grenze der API).",
+          "station_filter": "Tankstellen-IDs oder Marken, getrennt durch Komma oder Zeilenumbruch. Leer = alle Tankstellen.",
+          "scan_interval_min": "Regelmäßiges Abrufintervall. Tankerkönig erlaubt höchstens einen Abruf alle 5 Minuten.",
+          "move_threshold_km": "Sofort neu abrufen, sobald sich das Wohnmobil seit dem letzten Abruf weiter als diese Strecke bewegt hat."
+        }
+      }
+    },
+    "error": {
+      "no_location": "Mindestens einen Standort (zuhause oder unterwegs) aktivieren.",
+      "tracker_required": "Für Preise unterwegs eine Standort-Entity auswählen."
+    }
+  },
+  "selector": {
+    "fuel_type": {
+      "options": {
+        "diesel": "Diesel",
+        "e5": "Super E5",
+        "e10": "Super E10",
+        "all": "Alle"
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "stations": {
+        "name": "Tankstellen"
+      },
+      "last_success": {
+        "name": "Letzter erfolgreicher Abruf"
+      }
+    }
+  }
+}
