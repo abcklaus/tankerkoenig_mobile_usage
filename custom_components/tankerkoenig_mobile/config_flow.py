@@ -141,6 +141,8 @@ def _nest(flat: dict[str, Any]) -> dict[str, Any]:
     mobile_keys = {str(key) for key in MOBILE_SCHEMA.schema}
     nested: dict[str, Any] = {SECTION_HOME: {}, SECTION_MOBILE: {}}
     for key, value in flat.items():
+        if key == CONF_FUEL_TYPE and value not in FUEL_TYPES:
+            continue  # e.g. "all" from versions before 0.4.0; fall back to the default
         if key in home_keys:
             nested[SECTION_HOME][key] = value
         elif key in mobile_keys:

@@ -29,7 +29,7 @@ DEFAULT_SCAN_INTERVAL = 167  # minutes, roughly the former scan_interval of 1000
 DEFAULT_DWELL_MINUTES = 10
 DEFAULT_STATIONARY_TOLERANCE = 200  # meters
 
-FUEL_TYPES = ["diesel", "e5", "e10", "all"]
+FUEL_TYPES = ["diesel", "e5", "e10"]
 
 LOCATION_HOME = "home"
 LOCATION_MOBILE = "mobile"

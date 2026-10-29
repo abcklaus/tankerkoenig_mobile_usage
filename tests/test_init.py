@@ -364,3 +364,12 @@ async def test_fixed_times_skipped_in_zone(
     async_fire_time_changed(hass, target)
     await hass.async_block_till_done()
     assert aioclient_mock.call_count == 0
+
+
+async def test_legacy_fuel_type_all_falls_back_to_diesel(
+    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
+) -> None:
+    """Entries created with fuel_type "all" (before 0.4.0) query diesel."""
+    aioclient_mock.get(API_URL, json=STATIONS_RESPONSE)
+    await _setup(hass, fuel_type="all")
+    assert aioclient_mock.mock_calls[0][1].query["type"] == "diesel"

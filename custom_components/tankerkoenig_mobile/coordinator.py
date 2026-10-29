@@ -40,6 +40,7 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DEFAULT_STATIONARY_TOLERANCE,
     DOMAIN,
+    FUEL_TYPES,
     LOCATION_HOME,
     LOCATION_MOBILE,
     MIN_FETCH_GAP,
@@ -154,6 +155,9 @@ class TankerkoenigLocationCoordinator(DataUpdateCoordinator[LocationData | None]
         self._api_key: str = entry.data[CONF_API_KEY]
         self._radius = float(entry.options.get(CONF_RADIUS, DEFAULT_RADIUS))
         self._fuel_type: str = entry.options.get(CONF_FUEL_TYPE, DEFAULT_FUEL_TYPE)
+        if self._fuel_type not in FUEL_TYPES:
+            # e.g. "all" from versions before 0.4.0
+            self._fuel_type = DEFAULT_FUEL_TYPE
         self._tracker: str | None = entry.options.get(CONF_TRACKER)
         self._dwell = timedelta(
             minutes=float(entry.options.get(CONF_DWELL_MINUTES, DEFAULT_DWELL_MINUTES))

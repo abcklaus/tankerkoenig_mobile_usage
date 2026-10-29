@@ -5,8 +5,10 @@ Custom Integration für Home Assistant, die Kraftstoffpreise über die [Tankerk�
 - Ausgabe 1:1 im Format von `list.php` (`ok`, `license`, `data`, `status`, `stations`) als Attribute
 - Robust gegen fehlende Netzwerkverbindung: bei Fehlern bleibt der letzte Stand erhalten, auch über einen Neustart hinweg
 - Zeitpunkt des letzten erfolgreichen Abrufs als Attribut und als eigener Timestamp-Sensor
-- Positivliste für Tankstellen (nach ID oder Marke)
-- Unterwegs: Abruf im festen Intervall **und** sofort nach einem Ortswechsel (unter Einhaltung der 5-Minuten-Grenze von Tankerkönig)
+- Positivliste für Tankstellen zuhause (nach ID oder Marke)
+- Unterwegs: Abruf, sobald das Wohnmobil eine einstellbare Zeit steht, danach im festen Intervall; keine Abrufe während der Fahrt oder in der Daheim-Zone
+- Feste Abrufzeiten (z. B. wenn Preise zu festen Uhrzeiten wechseln)
+- Eigenes Integrations-Icon (ab Home Assistant 2026.3)
 
 ## Installation (HACS)
 
@@ -23,7 +25,7 @@ Ohne HACS: den Ordner `custom_components/tankerkoenig_mobile` nach `config/custo
 | Option | Bedeutung |
 |---|---|
 | API-Key | Persönlicher Tankerkönig-Key (nur bei der Einrichtung) |
-| Kraftstoffart | `diesel`, `e5`, `e10` oder `all` |
+| Kraftstoffart | `diesel`, `e5` oder `e10` (eine Sorte pro Integration) |
 | Suchradius | 1–25 km, gilt für zuhause und unterwegs |
 | Abrufintervall | Minuten, mindestens 5 (Standard 167 ≈ 10000 s). Unterwegs nur, solange das Wohnmobil steht |
 | Feste Abrufzeiten | Uhrzeiten im **24-Stunden-Format `HH:MM`** (z. B. `06:00, 12:00, 18:30`), getrennt durch Komma/Zeilenumbruch. Zu diesen Zeiten wird auf jeden Fall abgerufen – unterwegs nur im Stand |

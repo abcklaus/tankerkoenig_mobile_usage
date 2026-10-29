@@ -1,0 +1,12 @@
+{
+  "entity": {
+    "sensor": {
+      "stations": {
+        "default": "mdi:gas-station"
+      },
+      "last_success": {
+        "default": "mdi:clock-check-outline"
+      }
+    }
+  }
+}

@@ -5,10 +5,11 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import aiohttp
+import pytest
 from homeassistant import config_entries
 from homeassistant.const import CONF_API_KEY
 from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResultType
+from homeassistant.data_entry_flow import FlowResultType, InvalidData
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
@@ -16,6 +17,7 @@ from custom_components.tankerkoenig_mobile.const import (
     API_URL,
     CONF_ENABLE_HOME,
     CONF_ENABLE_MOBILE,
+    CONF_FUEL_TYPE,
     CONF_STATION_FILTER,
     CONF_TRACKER,
     DOMAIN,
@@ -139,3 +141,25 @@ async def test_options_flow(hass: HomeAssistant) -> None:
     assert entry.options[CONF_STATION_FILTER] == "JET"
     assert "move_threshold_km" not in entry.options
     assert entry.data == {CONF_API_KEY: API_KEY}
+
+
+async def test_fuel_type_all_is_rejected(hass: HomeAssistant) -> None:
+    """Only a single fuel type can be selected."""
+    result = await _start(hass)
+    with pytest.raises(InvalidData):
+        await hass.config_entries.flow.async_configure(
+            result["flow_id"], _user_input(fuel_type="all")
+        )
+
+
+async def test_options_flow_drops_legacy_fuel_type_all(hass: HomeAssistant) -> None:
+    """A stored "all" is not suggested; the form falls back to the default."""
+    entry = MockConfigEntry(
+        domain=DOMAIN, data={CONF_API_KEY: API_KEY}, options=make_options(fuel_type="all")
+    )
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    fuel_key = next(k for k in result["data_schema"].schema if str(k) == CONF_FUEL_TYPE)
+    assert (fuel_key.description or {}).get("suggested_value") != "all"
+    assert fuel_key.default() == "diesel"

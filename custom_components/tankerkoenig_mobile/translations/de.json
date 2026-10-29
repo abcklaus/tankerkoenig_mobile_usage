@@ -115,8 +115,7 @@
       "options": {
         "diesel": "Diesel",
         "e5": "Super E5",
-        "e10": "Super E10",
-        "all": "Alle"
+        "e10": "Super E10"
       }
     }
   },
